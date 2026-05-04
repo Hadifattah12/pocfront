@@ -25,8 +25,6 @@ import com.example.contactsyncpoc.ui.theme.ContactSyncPocTheme
 import com.example.contactsyncpoc.worker.ContactSyncWorker
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import androidx.work.workDataOf
-import java.util.UUID
 class MainActivity : ComponentActivity() {
 
     private var onPermissionResult: ((Boolean) -> Unit)? = null
@@ -92,12 +90,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startSyncWorker(onStatusChange: (String) -> Unit) {
-        val clientSyncId = UUID.randomUUID().toString();
-        val syncRequest = OneTimeWorkRequestBuilder<ContactSyncWorker>().setInputData(
-
-            workDataOf("clientSyncId" to clientSyncId)
-
-        ).build()
+        val syncRequest = OneTimeWorkRequestBuilder<ContactSyncWorker>().build()
         val workManager = WorkManager.getInstance(this)
         workManager.enqueue(syncRequest)
 

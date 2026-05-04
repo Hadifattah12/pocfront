@@ -31,4 +31,3 @@ object ApiClient {
         retrofit.create(ContactSyncApiService::class.java)
     }
 }
-

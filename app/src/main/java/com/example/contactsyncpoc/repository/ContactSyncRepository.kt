@@ -2,9 +2,11 @@ package com.example.contactsyncpoc.repository
 
 import android.content.Context
 import com.example.contactsyncpoc.ContactReader
+import com.example.contactsyncpoc.DeviceContact
 import com.example.contactsyncpoc.data.AppDatabase
-import com.example.contactsyncpoc.data.ContactSnapshot
+import com.example.contactsyncpoc.data.PendingSyncChunk
 import com.example.contactsyncpoc.network.ContactPayloadDto
+import com.example.contactsyncpoc.network.SyncChunkRequestDto
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,8 +18,8 @@ class ContactSyncRepository(private val context: Context) {
     suspend fun processContactsAndComputeDelta(): ContactDelta = withContext(Dispatchers.IO) {
 
         val addedContacts = mutableListOf<ContactPayloadDto>()
-        val deletedContacts = mutableListOf<ContactPayloadDto>()
         val updatedContacts = mutableListOf<ContactPayloadDto>()
+        val deletedContacts = mutableListOf<ContactPayloadDto>()
 
         Log.d("ContactSync", "Reading raw contacts from device...")
         val rawContacts = ContactReader.readPhoneNumbers(context)
@@ -32,7 +34,7 @@ class ContactSyncRepository(private val context: Context) {
         val isInitialSync = previousSnapshots.isEmpty()
 
         // Map current device contacts by their raw phone number, handling duplicate numbers safely
-        val currentMapped = mutableMapOf<String, com.example.contactsyncpoc.DeviceContact>()
+        val currentMapped = mutableMapOf<String, DeviceContact>()
         for (contact in rawContacts) {
             val phone = contact.phoneNumber
             val previousSnapshot = previousMapped[phone]
@@ -73,33 +75,73 @@ class ContactSyncRepository(private val context: Context) {
             }
         }
 
-        Log.d("ContactSync", "Sync Type: ${if (isInitialSync) "INITIAL" else "DELTA"} -> Added: ${addedContacts.size}, Deleted: ${deletedContacts.size}, Updated: ${updatedContacts.size}")
-
-        // Build the new snapshot that will replace the local DB only after sync finishes
-        val newSnapshot = currentMapped.map { (phone, contact) ->
-            ContactSnapshot(phone, contact.displayName)
-        }
+        Log.d("ContactSync", "Sync Type: ${if (isInitialSync) "INITIAL" else "INCREMENTAL"} -> Added: ${addedContacts.size}, Updated: ${updatedContacts.size}, Deleted: ${deletedContacts.size}")
 
         ContactDelta(
             added = addedContacts,
-            deleted = if (isInitialSync) emptyList() else deletedContacts,
             updated = if (isInitialSync) emptyList() else updatedContacts,
-            currentSnapshotEntities = newSnapshot,
+            deleted = if (isInitialSync) emptyList() else deletedContacts,
             isInitialSync = isInitialSync
         )
     }
 
-    suspend fun updateLocalSnapshot(snapshotEntities: List<ContactSnapshot>) = withContext<Unit>(Dispatchers.IO) {
-        Log.d("ContactSync", "Updating Room DB with new snapshot of size ${snapshotEntities.size}...")
-        contactDao.updateSnapshot(snapshotEntities)
-        Log.d("ContactSync", "Room DB update complete.")
+    suspend fun applySuccessfulChunk(
+        added: List<ContactPayloadDto>,
+        updated: List<ContactPayloadDto>,
+        deleted: List<ContactPayloadDto>
+    ) = withContext<Unit>(Dispatchers.IO) {
+        Log.d(
+            "ContactSync",
+            "Applying successful chunk locally -> Added: ${added.size}, Updated: ${updated.size}, Deleted: ${deleted.size}"
+        )
+
+        contactDao.applySuccessfulChunk(
+            added = added,
+            updated = updated,
+            deleted = deleted
+        )
+        Log.d("ContactSync", "Successful chunk applied to Room.")
     }
+
+    suspend fun getPendingChunks(): List<PendingSyncChunk> = withContext(Dispatchers.IO) {
+        contactDao.getPendingSyncChunks()
+    }
+
+    suspend fun savePendingChunk(request: SyncChunkRequestDto): PendingSyncChunk = withContext(Dispatchers.IO) {
+        val chunk = PendingSyncChunk(
+            syncType = request.syncType,
+            chunkIndex = request.chunkIndex,
+            added = request.added,
+            updated = request.updated,
+            deleted = request.deleted
+        )
+        val id = contactDao.insertPendingSyncChunk(chunk)
+        chunk.copy(id = id)
+    }
+
+    suspend fun applySuccessfulPendingChunk(chunk: PendingSyncChunk) = withContext<Unit>(Dispatchers.IO) {
+        Log.d(
+            "ContactSync",
+            "Applying and removing pending chunk ${chunk.id} -> Added: ${chunk.added.size}, Updated: ${chunk.updated.size}, Deleted: ${chunk.deleted.size}"
+        )
+        contactDao.applySuccessfulPendingChunk(chunk)
+    }
+
+}
+
+fun PendingSyncChunk.toRequestDto(): SyncChunkRequestDto {
+    return SyncChunkRequestDto(
+        syncType = syncType,
+        chunkIndex = chunkIndex,
+        added = added,
+        updated = updated,
+        deleted = deleted
+    )
 }
 
 data class ContactDelta(
     val added: List<ContactPayloadDto>,
-    val deleted: List<ContactPayloadDto>,
     val updated: List<ContactPayloadDto>,
-    val currentSnapshotEntities: List<ContactSnapshot>,
+    val deleted: List<ContactPayloadDto>,
     val isInitialSync: Boolean
 )

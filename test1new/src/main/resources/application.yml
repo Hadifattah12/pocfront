@@ -1,0 +1,17 @@
+#spring.application.name=test1
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/communication
+    username: root
+    password: H2x2z2a9900@42
+
+  jpa:
+    hibernate:
+#      checks table if exist
+      ddl-auto: validate
+#    print all sql queries in console
+    show-sql: true
+
+contact-sync:
+  hash-secret: "f97a8d21547a715316a52430185acbd8db8a545e72c10f1e2fd3a2e259fdda12"

@@ -4,9 +4,15 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
-@Database(entities = [ContactSnapshot::class], version = 4, exportSchema = false)
-abstract class  AppDatabase : RoomDatabase() {
+@Database(
+    entities = [ContactSnapshot::class, PendingSyncChunk::class],
+    version = 5,
+    exportSchema = false
+)
+@TypeConverters(ContactPayloadListConverter::class)
+abstract class AppDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
 
     companion object {
@@ -20,6 +26,7 @@ abstract class  AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "contact_sync_database"
                 )
+                // TODO: Add real Room migrations instead of destructive migration before production.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
                 INSTANCE = instance
