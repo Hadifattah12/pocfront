@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 class ContactSyncRepository(private val context: Context) {
 
     private val contactDao = AppDatabase.getDatabase(context).contactDao()
+    private val chunkDao = AppDatabase.getDatabase(context).pendingSyncChunkDao()
 
     suspend fun processContactsAndComputeDelta(): ContactDelta = withContext(Dispatchers.IO) {
 
@@ -104,7 +105,7 @@ class ContactSyncRepository(private val context: Context) {
     }
 
     suspend fun getPendingChunks(): List<PendingSyncChunk> = withContext(Dispatchers.IO) {
-        contactDao.getPendingSyncChunks()
+        chunkDao.getPendingSyncChunks()
     }
 
     suspend fun savePendingChunk(request: SyncChunkRequestDto): PendingSyncChunk = withContext(Dispatchers.IO) {
@@ -115,7 +116,7 @@ class ContactSyncRepository(private val context: Context) {
             updated = request.updated,
             deleted = request.deleted
         )
-        val id = contactDao.insertPendingSyncChunk(chunk)
+        val id = chunkDao.insertPendingSyncChunk(chunk)
         chunk.copy(id = id)
     }
 
@@ -124,7 +125,12 @@ class ContactSyncRepository(private val context: Context) {
             "ContactSync",
             "Applying and removing pending chunk ${chunk.id} -> Added: ${chunk.added.size}, Updated: ${chunk.updated.size}, Deleted: ${chunk.deleted.size}"
         )
-        contactDao.applySuccessfulPendingChunk(chunk)
+        contactDao.applySuccessfulChunk(
+            added = chunk.added,
+            updated = chunk.updated,
+            deleted = chunk.deleted
+        )
+        chunkDao.deletePendingSyncChunk(chunk.id)
     }
 
 }

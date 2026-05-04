@@ -24,10 +24,15 @@ class ContactSyncWorker(
         return try {
             val currentUserId = 1L
 
-            // Step 1: attempt all leftover pending chunks from previous runs (one try each)
-            attemptAllPending(currentUserId)
+            // Step 1: try sending any existing pending chunks
+            sendAllPendingUntilClear(currentUserId)
 
-            // Step 2: compute delta — snapshot is now accurate after step 1 success.
+            // If we still have pending chunks after retrying, we MUST back off and delay delta computation
+            if (repository.getPendingChunks().isNotEmpty()) {
+                return Result.retry()
+            }
+
+            // Step 2: compute fresh delta — snapshot is now accurate after step 1 success.
             val delta = repository.processContactsAndComputeDelta()
             val totalChanges = delta.added.size + delta.updated.size + delta.deleted.size
 
@@ -52,13 +57,15 @@ class ContactSyncWorker(
                     )
                     tryOnce(currentUserId, chunk)
                 }
+
+                // Retry anything still pending from Step 3 failures
+                sendAllPendingUntilClear(currentUserId)
             }
 
-            // Step 4: retry anything still pending (step 1 + step 3 failures) until clear.
-            // Chunks that fail MAX_RETRIES times this run are skipped and left in Room
-            // for the next worker run.
-            sendAllPendingUntilClear(currentUserId)
-
+            if (repository.getPendingChunks().isNotEmpty())
+            {
+                return Result.retry()
+            }
             Result.success()
         } catch (e: Exception) {
             e.printStackTrace()
@@ -66,16 +73,7 @@ class ContactSyncWorker(
         }
     }
 
-    // One pass over existing pending chunks — single attempt each, no blocking
-    private suspend fun attemptAllPending(userId: Long) {
-        val pending = repository.getPendingChunks()
-        for (chunk in pending) {
-            tryOnce(userId, chunk)
-        }
-    }
-
     // Retries all pending chunks up to MAX_RETRIES passes per worker run.
-    // Any chunks still pending after that are left in Room for the next run.
     private suspend fun sendAllPendingUntilClear(userId: Long) {
         var attempts = 0
         while (attempts < MAX_RETRIES) {
@@ -95,7 +93,8 @@ class ContactSyncWorker(
     private suspend fun tryOnce(userId: Long, chunk: PendingSyncChunk): Boolean {
         return try {
             val response = apiService.sendChunk(userId, chunk.toRequestDto())
-            if (response.success) {
+            if (response.success)
+            {
                 repository.applySuccessfulPendingChunk(chunk)
                 true
             } else {

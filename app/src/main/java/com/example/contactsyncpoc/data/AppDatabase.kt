@@ -14,6 +14,7 @@ import androidx.room.TypeConverters
 @TypeConverters(ContactPayloadListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun contactDao(): ContactDao
+    abstract fun pendingSyncChunkDao(): PendingSyncChunkDao
 
     companion object {
         @Volatile
