@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.contactsyncpoc"
-        minSdk = 27
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(project(":contact-sync")) // Adding library
     implementation(libs.retrofit2.core)
     implementation(libs.retrofit2.gson)
     implementation(libs.okhttp3.logging)

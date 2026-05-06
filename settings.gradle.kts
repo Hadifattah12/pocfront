@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ContactSyncPoc"
 include(":app")
+include(":contact-sync")

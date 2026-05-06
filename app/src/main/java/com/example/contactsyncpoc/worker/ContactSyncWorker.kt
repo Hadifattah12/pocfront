@@ -12,6 +12,12 @@ import com.example.contactsyncpoc.data.PendingSyncChunk
 import com.example.contactsyncpoc.repository.ContactSyncRepository
 import com.example.contactsyncpoc.repository.toRequestDto
 
+// ADDED IMPORTS FOR LIBRARY TEST
+import com.whish.contactsync.ContactSyncManager
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import java.util.concurrent.TimeUnit
+
 class ContactSyncWorker(
     appContext: Context,
     params: WorkerParameters
@@ -20,7 +26,43 @@ class ContactSyncWorker(
     private val repository = ContactSyncRepository(appContext)
     private val apiService = ApiClient.contactSyncApiService
 
+    // ADDED LIBRARY MANAGER FOR TEST
+    private val contactSyncManager: ContactSyncManager by lazy {
+        val loggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
+        val okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .build()
+
+        ContactSyncManager(
+            context = appContext,
+            okHttpClient = okHttpClient,
+            baseUrl = "http://10.0.2.2:8080/",
+            userIdProvider = { 1L }
+        )
+    }
+
     override suspend fun doWork(): Result {
+        // --- NEW LIBRARY TEST EXACT LOGIC ---
+        return try {
+            val result = contactSyncManager.syncContacts()
+            if (result.success) {
+                Log.d("ContactSync", "Library sync completed successfully!")
+                Result.success()
+            } else {
+                Log.e("ContactSync", "Library sync failed: ${result.errorMessage}")
+                Result.retry()
+            }
+        } catch (e: Exception) {
+            Log.e("ContactSync", "Library threw exception", e)
+            Result.retry()
+        }
+
+        /* --- OLD LOGIC COMMENTED OUT BELOW ---
         return try {
             val currentUserId = 1L
 
@@ -71,9 +113,11 @@ class ContactSyncWorker(
             e.printStackTrace()
             Result.retry()
         }
+        */
     }
 
     // Retries all pending chunks up to MAX_RETRIES passes per worker run.
+/*
     private suspend fun sendAllPendingUntilClear(userId: Long) {
         var attempts = 0
         while (attempts < MAX_RETRIES) {
@@ -106,6 +150,7 @@ class ContactSyncWorker(
             false
         }
     }
+*/
 
     private companion object {
         const val TAG = "ContactSync"

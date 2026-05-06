@@ -29,11 +29,13 @@ class MainActivity : ComponentActivity() {
 
     private var onPermissionResult: ((Boolean) -> Unit)? = null
 
-    private val requestContactsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-            onPermissionResult?.invoke(isGranted)
-        }
+    private val requestContactsPermission = registerForActivityResult(ActivityResultContracts.RequestPermission())
+    {
+        isGranted -> onPermissionResult?.invoke(isGranted)
+    }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?)
+    {
         super.onCreate(savedInstanceState)
 
         setContent {
