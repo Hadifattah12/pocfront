@@ -18,11 +18,11 @@ import okhttp3.OkHttpClient
 class ContactSyncManager(
     private val context: Context,
     private val okHttpClient: OkHttpClient,
-    private val baseUrl: String,
-    private val userIdProvider: () -> Long
+    private val endpointUrl: String,
+    private val headersProvider: () -> Map<String, String>
 ) {
     private val repository = ContactSyncRepository(context)
-    private val apiService = OkHttpContactSyncApi(okHttpClient, baseUrl)
+    private val apiService = OkHttpContactSyncApi(okHttpClient, endpointUrl)
 
     suspend fun syncContacts(): ContactSyncResult = withContext(Dispatchers.IO) {
         try {
@@ -38,10 +38,10 @@ class ContactSyncManager(
                 )
             }
 
-            val currentUserId = userIdProvider()
+            val currentHeaders = headersProvider()
 
             // Step 1: try sending any existing pending chunks first
-            sendAllPendingUntilClear(currentUserId)
+            sendAllPendingUntilClear(currentHeaders)
 
             // If pending chunks still exist, do not compute new delta yet.
             // This prevents stale backend/local state.
@@ -80,11 +80,11 @@ class ContactSyncManager(
                     )
                 )
 
-                tryOnce(currentUserId, chunk)
+                tryOnce(currentHeaders, chunk)
             }
 
             // Retry anything still pending from Step 3 failures
-            sendAllPendingUntilClear(currentUserId)
+            sendAllPendingUntilClear(currentHeaders)
 
             if (repository.getPendingChunks().isNotEmpty()) {
                 return@withContext ContactSyncResult.failure(
@@ -100,6 +100,18 @@ class ContactSyncManager(
                 errorCode = ContactSyncErrorCode.CONTACT_PERMISSION_NOT_GRANTED,
                 errorMessage = e.message ?: "READ_CONTACTS permission is not granted"
             )
+        } catch (e: java.io.IOException) {
+            Log.e(TAG, "Network or IO error during sync", e)
+            ContactSyncResult.failure(
+                errorCode = ContactSyncErrorCode.NETWORK_ERROR,
+                errorMessage = e.message ?: "Network error"
+            )
+        } catch (e: android.database.SQLException) {
+            Log.e(TAG, "Database error during sync", e)
+            ContactSyncResult.failure(
+                errorCode = ContactSyncErrorCode.DATABASE_ERROR,
+                errorMessage = e.message ?: "Database error"
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Contact sync failed", e)
 
@@ -111,7 +123,7 @@ class ContactSyncManager(
     }
 
     // Retries all pending chunks up to MAX_RETRIES passes per sync call.
-    private suspend fun sendAllPendingUntilClear(userId: Long) {
+    private suspend fun sendAllPendingUntilClear(headers: Map<String, String>) {
         var attempts = 0
 
         while (attempts < MAX_RETRIES) {
@@ -122,7 +134,7 @@ class ContactSyncManager(
             }
 
             for (chunk in pending) {
-                tryOnce(userId, chunk)
+                tryOnce(headers, chunk)
             }
 
             attempts++
@@ -136,11 +148,11 @@ class ContactSyncManager(
     // Single attempt: success applies chunk to Room and removes pending chunk.
     // Failure leaves it pending for the next retry.
     private suspend fun tryOnce(
-        userId: Long,
+        headers: Map<String, String>,
         chunk: PendingSyncChunk
     ): Boolean {
         return try {
-            val response = apiService.sendChunk(userId, chunk.toRequestDto())
+            val response = apiService.sendChunk(headers, chunk.toRequestDto())
 
             if (response.success) {
                 repository.applySuccessfulPendingChunk(chunk)

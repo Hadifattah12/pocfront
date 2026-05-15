@@ -41,8 +41,8 @@ class ContactSyncWorker(
         ContactSyncManager(
             context = appContext,
             okHttpClient = okHttpClient,
-            baseUrl = "http://10.0.2.2:8080/",
-            userIdProvider = { 1L }
+            endpointUrl = "http://10.0.2.2:8080/api/contacts/batch",
+            headersProvider = { mapOf("X-User-Id" to "1") }
         )
     }
 

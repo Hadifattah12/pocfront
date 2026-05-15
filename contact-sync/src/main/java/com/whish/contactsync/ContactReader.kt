@@ -2,7 +2,6 @@ package com.whish.contactsync
 
 import android.content.Context
 import android.provider.ContactsContract
-import android.util.Log
 
 data class DeviceContact(
     val displayName: String?,
@@ -38,7 +37,6 @@ object ContactReader {
 
                 if (!rawNumber.isNullOrBlank())
                 {
-                    Log.d("ContactSync", "Contact found -> Name: ${displayName.orEmpty()}, Raw number: $rawNumber")
                     deviceContacts.add(DeviceContact(displayName, rawNumber))
                 }
             }

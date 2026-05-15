@@ -11,11 +11,11 @@ import java.io.IOException
 
 internal class OkHttpContactSyncApi(
     private val client: OkHttpClient,
-    private val baseUrl: String,
+    private val endpointUrl: String,
     private val gson: Gson = Gson()
 ) {
     suspend fun sendChunk(
-        userId: Long,
+        headers: Map<String, String>,
         requestDto: SyncChunkRequestDto
     ): SyncChunkResponse = withContext(Dispatchers.IO) {
         val json = gson.toJson(requestDto)
@@ -24,11 +24,15 @@ internal class OkHttpContactSyncApi(
             "application/json; charset=utf-8".toMediaType()
         )
 
-        val request = Request.Builder()
-            .url(baseUrl.trimEnd('/') + "/api/contacts/batch")
-            .addHeader("X-User-Id", userId.toString())
+        val requestBuilder = Request.Builder()
+            .url(endpointUrl)
             .post(body)
-            .build()
+
+        headers.forEach { (key, value) ->
+            requestBuilder.addHeader(key, value)
+        }
+
+        val request = requestBuilder.build()
 
         client.newCall(request).execute().use { response ->
             val responseBody = response.body.string()

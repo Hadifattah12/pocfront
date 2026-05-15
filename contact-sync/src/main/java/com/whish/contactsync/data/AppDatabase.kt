@@ -27,8 +27,6 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "contact_sync_database"
                 )
-                    // TODO: Add real Room migrations instead of destructive migration before production.
-                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance
                 instance
